@@ -16,14 +16,17 @@ st.set_page_config(page_title="Msheireb Companion", page_icon="🌴")
 
 # ---------- Setup ----------
 # One attempt per model and a 15 s limit: if a model is busy or out of quota the app moves straight
-# to the single backup model, so the longest a visitor can wait for an error is about 30 s.
+# on to the next model in MODELS below.
 client = genai.Client(
     api_key=st.secrets["GEMINI_API_KEY"],
     http_options=types.HttpOptions(timeout=15_000, retry_options=types.HttpRetryOptions(attempts=1)),
 )
 MODEL = st.secrets.get("GEMINI_MODEL", "gemini-3.5-flash")
 FALLBACK_MODEL = st.secrets.get("GEMINI_FALLBACK_MODEL", "gemini-flash-latest")
-MODELS = list(dict.fromkeys([MODEL, FALLBACK_MODEL]))
+# Busy models usually refuse within a few seconds (503), so trying several backups costs little.
+# Free-tier quotas are also per model, so each backup adds more free requests per day.
+MODELS = list(dict.fromkeys([MODEL, FALLBACK_MODEL, "gemini-3-flash-preview", "gemini-3.7-flash",
+                             "gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-3.1-flash-lite"]))
 
 # Presenter view (sliders + insights panel) is opened with ?presenter=1 in the URL.
 # Visitors never see it: they get today's temperature from the secrets file and the real Doha time.
@@ -318,8 +321,8 @@ if prompt:
         box = st.empty()
         box.markdown(wrap(T["thinking"]), unsafe_allow_html=True)
         text = ""
-        # The reply is drawn word by word as it arrives. If the main model is busy (503) or out of
-        # quota (429), start again once with the backup model.
+        # The reply is drawn word by word as it arrives. If a model is busy (503) or out of
+        # quota (429), start again with the next one.
         for model_name in MODELS:
             text = ""
             try:
